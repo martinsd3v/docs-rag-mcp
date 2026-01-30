@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "trx-docs": {
+      "command": "/path/to/docs-rag-mcp/bin/docs-rag-mcp-server",
+      "args": [],
+      "env": {
+        "DB_PATH": "/path/to/docs-rag-mcp/data/docs.db",
+        "OPENAI_API_KEY": "your-api-key",
+        "OPENAI_BASE_URL": "https://ai.v3m.ai/v1"
+      }
+    }
+  }
+}

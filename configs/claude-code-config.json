@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "trx-docs": {
+      "command": "/Users/marcelo/myspace/claude/docs-rag-mcp/bin/docs-rag-mcp-server",
+      "env": {
+        "DB_PATH": "/Users/marcelo/myspace/claude/docs-rag-mcp/data/docs.db",
+        "OPENAI_API_KEY": "token-marcelo",
+        "OPENAI_BASE_URL": "https://ai.v3m.ai/v1"
+      }
+    }
+  }
+}

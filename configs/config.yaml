@@ -1,0 +1,116 @@
+# docs-rag-mcp Configuration
+
+# Database configuration
+database:
+  path: ./data/docs.db
+  # SQLite performance tuning
+  wal_mode: true
+  cache_size_mb: 64
+  mmap_size_mb: 256
+
+# OpenAI API configuration
+openai:
+  # API key (can use env var: ${OPENAI_API_KEY})
+  api_key: ${OPENAI_API_KEY}
+  # Embedding model to use
+  model: text-embedding-3-small
+  # Rate limiting (requests per minute)
+  rate_limit: 1000
+  # Timeout for API requests (seconds)
+  timeout: 30
+  # Max retries for failed requests
+  max_retries: 3
+  # Retry backoff (seconds)
+  retry_backoff: [1, 2, 4]
+
+# Chunking configuration
+chunking:
+  # Minimum chunk size in tokens
+  min_size: 500
+  # Maximum chunk size in tokens
+  max_size: 1000
+  # Overlap between chunks in tokens
+  overlap: 150
+  # Respect boundaries (don't break code blocks, tables, lists)
+  respect_boundaries: true
+
+# Search configuration
+search:
+  # Default number of results to return
+  default_top_k: 5
+  # Minimum similarity score (0-1)
+  min_score: 0.7
+  # Enable graph expansion for related documents
+  graph_expansion: true
+  # Maximum graph depth for expansion
+  max_graph_depth: 2
+  # Query cache TTL (seconds)
+  query_cache_ttl: 300
+
+# Indexing configuration
+indexing:
+  # Batch size for embedding generation
+  batch_size: 100
+  # Number of parallel workers
+  workers: 4
+  # Skip files larger than this (MB)
+  max_file_size_mb: 10
+  # Document types to index
+  doc_types:
+    - RFC
+    - ADR
+    - BDR
+    - Guideline
+    - Roadmap
+  # File patterns to include
+  include_patterns:
+    - "**/*.md"
+  # File patterns to exclude
+  exclude_patterns:
+    - "**/node_modules/**"
+    - "**/vendor/**"
+    - "**/.*/**"
+
+# MCP Server configuration
+mcp:
+  # Server name in Claude Code
+  name: trx-docs
+  # Server version
+  version: 0.1.0
+  # Description shown in Claude Code
+  description: RAG server for trx-standards documentation
+
+# Web UI configuration
+web:
+  # HTTP port
+  port: 3000
+  # Enable CORS
+  cors_enabled: true
+  # Allowed origins for CORS
+  cors_origins:
+    - http://localhost:5173
+    - http://localhost:3000
+  # Enable API authentication
+  auth_enabled: false
+  # API key (if auth_enabled)
+  api_key: ${API_KEY}
+
+# Logging configuration
+logging:
+  # Log level: debug, info, warn, error
+  level: info
+  # Log format: json, text
+  format: text
+  # Log file path (empty for stdout only)
+  file: ""
+
+# Cache configuration
+cache:
+  # Enable embedding cache
+  enabled: true
+  # Clean cache older than (days)
+  max_age_days: 30
+  # Maximum cache entries
+  max_entries: 10000
+  # Clean cache on startup
+  clean_on_startup: false

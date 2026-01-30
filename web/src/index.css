@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-neutral-50 text-neutral-900 antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  code, pre {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary-500 text-white px-4 py-2 rounded-lg font-medium
+           hover:bg-primary-600 transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply bg-neutral-100 text-neutral-700 px-4 py-2 rounded-lg font-medium
+           hover:bg-neutral-200 transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:ring-offset-2;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-neutral-100;
+  }
+
+  .card-hover {
+    @apply card hover:shadow-md transition-shadow duration-200;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-neutral-100 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-neutral-300 rounded-full hover:bg-neutral-400;
+}
