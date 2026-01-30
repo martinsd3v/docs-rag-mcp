@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/trxio/docs-rag-mcp/internal/api/models"
 	"github.com/trxio/docs-rag-mcp/internal/embeddings"
+	"github.com/trxio/docs-rag-mcp/internal/mcp"
 	"github.com/trxio/docs-rag-mcp/internal/vector"
 )
 
@@ -46,18 +49,24 @@ func DefaultConfig() *Config {
 // Server represents the HTTP API server
 type Server struct {
 	cfg             *Config
-	store           *vector.Store
-	embeddingClient embeddings.EmbeddingClient
+	store           *vector.Store           // Can be nil if no project is active
+	embeddingClient embeddings.EmbeddingClient // Can be nil if no project is active
 	router          chi.Router
 	log             func(format string, args ...interface{})
+	projectManager  *ProjectManager
+	activeProjectID string
+	activeProject   *Project
+	mcpHandler      *mcp.MCPHTTPHandler // MCP over HTTP/SSE handler
+	mu              sync.RWMutex // Protects store/embeddingClient during hot-swap
 }
 
 // NewServer creates a new API server
-func NewServer(cfg *Config, store *vector.Store, embClient embeddings.EmbeddingClient) *Server {
+func NewServer(cfg *Config, store *vector.Store, embClient embeddings.EmbeddingClient, pm *ProjectManager) *Server {
 	s := &Server{
 		cfg:             cfg,
 		store:           store,
 		embeddingClient: embClient,
+		projectManager:  pm,
 		log: func(format string, args ...interface{}) {
 			fmt.Printf("[API] "+format+"\n", args...)
 		},
@@ -95,20 +104,57 @@ func (s *Server) setupRoutes() chi.Router {
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
+		// Project management routes (always available)
+		r.Get("/projects", s.handleListProjects)
+		r.Post("/projects", s.handleCreateProject)
+		r.Delete("/projects/{id}", s.handleDeleteProject)
+		r.Post("/projects/{id}/start", s.handleStartProject)
+		r.Post("/projects/stop", s.handleStopProject)
+		r.Get("/projects/active", s.handleGetActiveProject)
+
+		// Health check (always available)
 		r.Get("/health", s.handleHealth)
-		r.Get("/stats", s.handleStats)
-		r.Get("/documents", s.handleListDocuments)
-		r.Get("/documents/{id}", s.handleGetDocument)
-		r.Post("/search", s.handleSearch)
-		r.Post("/upload", s.handleUpload)
+
+		// Routes that require an active project
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireActiveProject)
+			r.Get("/stats", s.handleStats)
+			r.Get("/documents", s.handleListDocuments)
+			r.Get("/documents/{id}", s.handleGetDocument)
+			r.Post("/search", s.handleSearch)
+			r.Post("/upload", s.handleUpload)
+		})
+	})
+
+	// MCP routes (require active project)
+	r.Route("/mcp", func(r chi.Router) {
+		r.Use(s.requireActiveProject)
+		r.Get("/sse", s.handleMCPSSE)
+		r.Post("/message", s.handleMCPMessage)
 	})
 
 	// Static files (SPA fallback)
 	if s.cfg.StaticDir != "" {
-		fileServer := http.FileServer(http.Dir(s.cfg.StaticDir))
+		staticDir := s.cfg.StaticDir
 		r.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Try to serve the file, fallback to index.html for SPA routing
-			http.StripPrefix("/", fileServer).ServeHTTP(w, r)
+			// Get the requested path
+			path := r.URL.Path
+
+			// Try to serve the static file
+			filePath := staticDir + path
+			if _, err := os.Stat(filePath); err == nil {
+				http.ServeFile(w, r, filePath)
+				return
+			}
+
+			// For assets directory, return 404 if not found
+			if len(path) > 8 && path[:8] == "/assets/" {
+				http.NotFound(w, r)
+				return
+			}
+
+			// Fallback to index.html for SPA routing
+			http.ServeFile(w, r, staticDir+"/index.html")
 		}))
 	}
 
@@ -148,25 +194,34 @@ func (s *Server) Start(ctx context.Context) error {
 // Handler implementations
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	checks := map[string]string{
-		"database": "ok",
-	}
+	checks := map[string]string{}
+
+	s.mu.RLock()
+	hasStore := s.store != nil
+	hasEmbeddings := s.embeddingClient != nil
+	s.mu.RUnlock()
 
 	// Check database
-	if _, err := s.store.GetStats(); err != nil {
-		checks["database"] = "error: " + err.Error()
+	if hasStore {
+		if _, err := s.store.GetStats(); err != nil {
+			checks["database"] = "error: " + err.Error()
+		} else {
+			checks["database"] = "ok"
+		}
+	} else {
+		checks["database"] = "no project active"
 	}
 
 	// Check embeddings
-	if s.embeddingClient != nil {
+	if hasEmbeddings {
 		checks["embeddings"] = "ok"
 	} else {
-		checks["embeddings"] = "not configured"
+		checks["embeddings"] = "no project active"
 	}
 
 	status := "healthy"
 	for _, v := range checks {
-		if v != "ok" && v != "not configured" {
+		if v != "ok" && v != "not configured" && v != "no project active" {
 			status = "degraded"
 			break
 		}
@@ -435,4 +490,112 @@ func (s *Server) writeError(w http.ResponseWriter, status int, message string, e
 		resp.Details = err.Error()
 	}
 	s.writeJSON(w, status, resp)
+}
+
+// MCP HTTP/SSE handlers
+
+// handleMCPSSE handles GET /mcp/sse - establishes SSE connection for MCP
+func (s *Server) handleMCPSSE(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	handler := s.mcpHandler
+	s.mu.RUnlock()
+
+	if handler == nil {
+		s.writeError(w, http.StatusServiceUnavailable, "MCP handler not initialized", nil)
+		return
+	}
+
+	handler.HandleSSE(w, r)
+}
+
+// handleMCPMessage handles POST /mcp/message - receives MCP JSON-RPC messages
+func (s *Server) handleMCPMessage(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	handler := s.mcpHandler
+	s.mu.RUnlock()
+
+	if handler == nil {
+		s.writeError(w, http.StatusServiceUnavailable, "MCP handler not initialized", nil)
+		return
+	}
+
+	handler.HandleMessage(w, r)
+}
+
+// requireActiveProject is middleware that ensures a project is active
+func (s *Server) requireActiveProject(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.mu.RLock()
+		hasProject := s.store != nil
+		s.mu.RUnlock()
+
+		if !hasProject {
+			s.writeError(w, http.StatusServiceUnavailable, "no project active - select a project first", nil)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// startProject initializes the store and embedding client for a project
+func (s *Server) startProject(project *Project) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// If there's already a project running, stop it first
+	if s.store != nil {
+		s.store.Close()
+		s.store = nil
+		s.embeddingClient = nil
+	}
+	if s.mcpHandler != nil {
+		s.mcpHandler.Close()
+		s.mcpHandler = nil
+	}
+
+	// Open the project's database
+	store, err := vector.NewStore(project.DBPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Detect provider and create embedding client
+	provider := embeddings.DetectProvider(project.Host, project.Token)
+
+	apiKey := project.Token
+	if apiKey == "" {
+		apiKey = "ollama" // Default for Ollama
+	}
+
+	unifiedConfig := &embeddings.UnifiedConfig{
+		Provider:  provider,
+		APIKey:    apiKey,
+		BaseURL:   project.Host,
+		Model:     project.Model,
+		BatchSize: 100,
+	}
+
+	embClient, err := embeddings.NewEmbeddingClient(unifiedConfig)
+	if err != nil {
+		store.Close()
+		return fmt.Errorf("failed to create embedding client: %w", err)
+	}
+
+	// Create MCP HTTP handler with tools
+	toolsHandler := mcp.NewToolsHandler(store, embClient)
+	mcpHandler := mcp.NewMCPHTTPHandler(toolsHandler)
+	mcpHandler.SetLogger(s.log)
+
+	// Update server state
+	s.store = store
+	s.embeddingClient = embClient
+	s.activeProjectID = project.ID
+	s.activeProject = project
+	s.mcpHandler = mcpHandler
+
+	s.log("Started project: %s (host: %s, model: %s)", project.Name, project.Host, project.Model)
+	s.log("MCP server available at /mcp/sse")
+
+	return nil
 }

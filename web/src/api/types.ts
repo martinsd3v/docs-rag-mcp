@@ -1,5 +1,33 @@
 // API Types
 
+// Project types
+export interface Project {
+  id: string
+  name: string
+  host: string
+  has_token: boolean
+  model: string
+  db_path: string
+  created_at: string
+}
+
+export interface ProjectListResponse {
+  projects: Project[]
+  active_project_id: string | null
+}
+
+export interface ActiveProjectResponse {
+  project: Project | null
+  status: 'running' | 'stopped'
+}
+
+export interface CreateProjectRequest {
+  name: string
+  host: string
+  token?: string
+  model: string
+}
+
 export interface HealthResponse {
   status: string
   version: string

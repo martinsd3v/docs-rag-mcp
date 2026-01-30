@@ -1,0 +1,202 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+)
+
+// ProjectResponse represents a project in API responses (with masked token)
+type ProjectResponse struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Host      string `json:"host"`
+	HasToken  bool   `json:"has_token"`
+	Model     string `json:"model"`
+	DBPath    string `json:"db_path"`
+	CreatedAt string `json:"created_at"`
+}
+
+// ProjectListResponse represents the list projects response
+type ProjectListResponse struct {
+	Projects        []ProjectResponse `json:"projects"`
+	ActiveProjectID string            `json:"active_project_id"`
+}
+
+// ActiveProjectResponse represents the active project response
+type ActiveProjectResponse struct {
+	Project *ProjectResponse `json:"project"`
+	Status  string           `json:"status"` // "running" or "stopped"
+}
+
+// CreateProjectRequest represents the create project request
+type CreateProjectRequest struct {
+	Name  string `json:"name"`
+	Host  string `json:"host"`
+	Token string `json:"token,omitempty"`
+	Model string `json:"model"`
+}
+
+// toProjectResponse converts a Project to ProjectResponse
+func toProjectResponse(p *Project) ProjectResponse {
+	return ProjectResponse{
+		ID:        p.ID,
+		Name:      p.Name,
+		Host:      p.Host,
+		HasToken:  p.Token != "",
+		Model:     p.Model,
+		DBPath:    p.DBPath,
+		CreatedAt: p.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+}
+
+// handleListProjects returns all projects
+func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
+	projects, err := s.projectManager.List()
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "failed to list projects", err)
+		return
+	}
+
+	resp := ProjectListResponse{
+		Projects:        make([]ProjectResponse, len(projects)),
+		ActiveProjectID: s.activeProjectID,
+	}
+
+	for i, p := range projects {
+		resp.Projects[i] = toProjectResponse(&p)
+	}
+
+	s.writeJSON(w, http.StatusOK, resp)
+}
+
+// handleCreateProject creates a new project
+func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
+	var req CreateProjectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	if req.Name == "" {
+		s.writeError(w, http.StatusBadRequest, "name is required", nil)
+		return
+	}
+	if req.Host == "" {
+		s.writeError(w, http.StatusBadRequest, "host is required", nil)
+		return
+	}
+	if req.Model == "" {
+		s.writeError(w, http.StatusBadRequest, "model is required", nil)
+		return
+	}
+
+	project, err := s.projectManager.Create(req.Name, req.Host, req.Token, req.Model)
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "failed to create project", err)
+		return
+	}
+
+	resp := toProjectResponse(project)
+	s.writeJSON(w, http.StatusCreated, resp)
+}
+
+// handleDeleteProject deletes a project
+func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		s.writeError(w, http.StatusBadRequest, "project id is required", nil)
+		return
+	}
+
+	// Check if project is currently active
+	s.mu.RLock()
+	activeID := s.activeProjectID
+	s.mu.RUnlock()
+
+	if id == activeID {
+		s.writeError(w, http.StatusConflict, "cannot delete active project - stop it first", nil)
+		return
+	}
+
+	if err := s.projectManager.Delete(id); err != nil {
+		s.writeError(w, http.StatusInternalServerError, "failed to delete project", err)
+		return
+	}
+
+	s.writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// handleGetActiveProject returns the currently active project
+func (s *Server) handleGetActiveProject(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	activeProject := s.activeProject
+	s.mu.RUnlock()
+
+	if activeProject == nil {
+		s.writeJSON(w, http.StatusOK, ActiveProjectResponse{
+			Project: nil,
+			Status:  "stopped",
+		})
+		return
+	}
+
+	resp := toProjectResponse(activeProject)
+	s.writeJSON(w, http.StatusOK, ActiveProjectResponse{
+		Project: &resp,
+		Status:  "running",
+	})
+}
+
+// handleStartProject starts a project (initializes store and embedding client)
+func (s *Server) handleStartProject(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		s.writeError(w, http.StatusBadRequest, "project id is required", nil)
+		return
+	}
+
+	project, err := s.projectManager.Get(id)
+	if err != nil {
+		s.writeError(w, http.StatusNotFound, "project not found", err)
+		return
+	}
+
+	if err := s.startProject(project); err != nil {
+		s.writeError(w, http.StatusInternalServerError, "failed to start project", err)
+		return
+	}
+
+	resp := toProjectResponse(project)
+	s.writeJSON(w, http.StatusOK, ActiveProjectResponse{
+		Project: &resp,
+		Status:  "running",
+	})
+}
+
+// handleStopProject stops the active project
+func (s *Server) handleStopProject(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.store == nil {
+		s.writeError(w, http.StatusBadRequest, "no project running", nil)
+		return
+	}
+
+	// Close MCP handler
+	if s.mcpHandler != nil {
+		s.mcpHandler.Close()
+		s.mcpHandler = nil
+	}
+
+	// Close connections
+	s.store.Close()
+	s.store = nil
+	s.embeddingClient = nil
+	s.activeProjectID = ""
+	s.activeProject = nil
+
+	s.writeJSON(w, http.StatusOK, map[string]string{"status": "stopped"})
+}

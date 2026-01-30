@@ -1,0 +1,13 @@
+{
+  "projects": [
+    {
+      "id": "43c7b2c1",
+      "name": "terrix",
+      "host": "http://localhost:11434",
+      "token": "",
+      "model": "nomic-embed-text",
+      "db_path": "data/projects/43c7b2c1.db",
+      "created_at": "2026-01-30T00:55:57.66943-03:00"
+    }
+  ]
+}

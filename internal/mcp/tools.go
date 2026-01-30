@@ -56,7 +56,7 @@ func (h *ToolsHandler) RegisterTools(server *Server) {
 			},
 			Required: []string{"query"},
 		},
-	}, h.searchDocs)
+	}, h.SearchDocs)
 
 	// Tool 2: get_relevant_context
 	server.RegisterTool(Tool{
@@ -82,7 +82,7 @@ func (h *ToolsHandler) RegisterTools(server *Server) {
 			},
 			Required: []string{"task"},
 		},
-	}, h.getRelevantContext)
+	}, h.GetRelevantContext)
 
 	// Tool 3: get_document
 	server.RegisterTool(Tool{
@@ -108,7 +108,7 @@ func (h *ToolsHandler) RegisterTools(server *Server) {
 			},
 			Required: []string{"doc_id"},
 		},
-	}, h.getDocument)
+	}, h.GetDocument)
 
 	// Tool 4: search_by_section
 	server.RegisterTool(Tool{
@@ -139,7 +139,7 @@ func (h *ToolsHandler) RegisterTools(server *Server) {
 			},
 			Required: []string{"query"},
 		},
-	}, h.searchBySection)
+	}, h.SearchBySection)
 
 	// Tool 5: find_related_docs
 	server.RegisterTool(Tool{
@@ -165,7 +165,7 @@ func (h *ToolsHandler) RegisterTools(server *Server) {
 			},
 			Required: []string{"doc_id"},
 		},
-	}, h.findRelatedDocs)
+	}, h.FindRelatedDocs)
 }
 
 // Tool implementations
@@ -178,7 +178,7 @@ type SearchDocsArgs struct {
 	MinScore float32  `json:"min_score"`
 }
 
-func (h *ToolsHandler) searchDocs(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
+func (h *ToolsHandler) SearchDocs(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
 	var params SearchDocsArgs
 	if err := json.Unmarshal(args, &params); err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
@@ -244,7 +244,7 @@ type GetRelevantContextArgs struct {
 	ExpandGraph bool   `json:"expand_graph"`
 }
 
-func (h *ToolsHandler) getRelevantContext(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
+func (h *ToolsHandler) GetRelevantContext(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
 	var params GetRelevantContextArgs
 	if err := json.Unmarshal(args, &params); err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
@@ -315,7 +315,7 @@ type GetDocumentArgs struct {
 	IncludeRelated bool   `json:"include_related"`
 }
 
-func (h *ToolsHandler) getDocument(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
+func (h *ToolsHandler) GetDocument(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
 	var params GetDocumentArgs
 	if err := json.Unmarshal(args, &params); err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
@@ -392,7 +392,7 @@ type SearchBySectionArgs struct {
 	TopK         int      `json:"top_k"`
 }
 
-func (h *ToolsHandler) searchBySection(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
+func (h *ToolsHandler) SearchBySection(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
 	var params SearchBySectionArgs
 	if err := json.Unmarshal(args, &params); err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
@@ -458,7 +458,7 @@ type FindRelatedDocsArgs struct {
 	IncludeIncoming bool   `json:"include_incoming"`
 }
 
-func (h *ToolsHandler) findRelatedDocs(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
+func (h *ToolsHandler) FindRelatedDocs(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
 	var params FindRelatedDocsArgs
 	if err := json.Unmarshal(args, &params); err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)

@@ -1,11 +1,9 @@
-.PHONY: build build-prod clean test lint run-indexer run-server run-web install-tools build-frontend
+.PHONY: build build-prod clean test lint run-web install-tools build-frontend
 
-# Build all binaries
+# Build web server binary
 build:
-	@echo "Building binaries..."
+	@echo "Building binary..."
 	@mkdir -p bin
-	go build -o bin/docs-rag-indexer cmd/indexer/main.go
-	go build -o bin/docs-rag-mcp-server cmd/server/main.go
 	go build -o bin/docs-rag-web cmd/web/main.go
 	@echo "Build complete!"
 
@@ -21,10 +19,8 @@ build-all: build build-frontend
 
 # Build for production with optimizations
 build-prod:
-	@echo "Building production binaries..."
+	@echo "Building production binary..."
 	@mkdir -p bin
-	CGO_ENABLED=1 go build -ldflags="-s -w" -o bin/docs-rag-indexer cmd/indexer/main.go
-	CGO_ENABLED=1 go build -ldflags="-s -w" -o bin/docs-rag-mcp-server cmd/server/main.go
 	CGO_ENABLED=1 go build -ldflags="-s -w" -o bin/docs-rag-web cmd/web/main.go
 	cd web && npm run build
 	@echo "Production build complete!"
@@ -65,20 +61,12 @@ install-tools:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	@echo "Tools installed!"
 
-# Run indexer
-run-indexer:
-	@go run cmd/indexer/main.go
-
-# Run MCP server
-run-server:
-	@go run cmd/server/main.go
-
 # Run web server (development with hot reload)
 run-web-dev:
 	@echo "Starting frontend dev server..."
 	cd web && npm run dev &
 	@echo "Starting backend..."
-	go run cmd/web/main.go --ollama
+	go run cmd/web/main.go
 
 # Run web server
 run-web:
@@ -94,16 +82,17 @@ init-db:
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  build          - Build all binaries"
-	@echo "  build-prod     - Build production binaries with optimizations"
+	@echo "  build          - Build web server binary"
+	@echo "  build-frontend - Build React frontend"
+	@echo "  build-all      - Build backend + frontend"
+	@echo "  build-prod     - Build production binary with optimizations"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  test           - Run tests"
 	@echo "  test-coverage  - Run tests with coverage"
 	@echo "  bench          - Run benchmarks"
 	@echo "  lint           - Run linters"
 	@echo "  install-tools  - Install development tools"
-	@echo "  run-indexer    - Run indexer (development)"
-	@echo "  run-server     - Run MCP server (development)"
 	@echo "  run-web        - Run web server (development)"
+	@echo "  run-web-dev    - Run with frontend hot reload"
 	@echo "  init-db        - Initialize SQLite database"
 	@echo "  help           - Show this help message"

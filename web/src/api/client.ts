@@ -7,6 +7,10 @@ import type {
   SearchResponse,
   SearchRequest,
   UploadResponse,
+  ProjectListResponse,
+  ActiveProjectResponse,
+  CreateProjectRequest,
+  Project,
 } from './types'
 
 const api = axios.create({
@@ -16,6 +20,35 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+// Projects
+export async function listProjects(): Promise<ProjectListResponse> {
+  const { data } = await api.get<ProjectListResponse>('/projects')
+  return data
+}
+
+export async function createProject(request: CreateProjectRequest): Promise<Project> {
+  const { data } = await api.post<Project>('/projects', request)
+  return data
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await api.delete(`/projects/${id}`)
+}
+
+export async function startProject(id: string): Promise<ActiveProjectResponse> {
+  const { data } = await api.post<ActiveProjectResponse>(`/projects/${id}/start`)
+  return data
+}
+
+export async function stopProject(): Promise<void> {
+  await api.post('/projects/stop')
+}
+
+export async function getActiveProject(): Promise<ActiveProjectResponse> {
+  const { data } = await api.get<ActiveProjectResponse>('/projects/active')
+  return data
+}
 
 // Health
 export async function getHealth(): Promise<HealthResponse> {
