@@ -18,10 +18,8 @@ vendor/
 # Go workspace file
 go.work
 
-# Database files
-data/*.db
-data/*.db-shm
-data/*.db-wal
+# Database files and data directory
+data/
 
 # Environment variables
 .env

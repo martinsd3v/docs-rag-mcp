@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Database, Folder, Play, Trash2, Plus, Loader2 } from 'lucide-react'
+import { Database, Folder, Play, Trash2, Plus, Loader2, Pencil } from 'lucide-react'
 import { useProjects, useStartProject, useDeleteProject } from '../hooks/useProjects'
 import { CreateProjectModal } from '../components/projects/CreateProjectModal'
+import { EditProjectModal } from '../components/projects/EditProjectModal'
 import { ConfirmModal } from '../components/ui/ConfirmModal'
 import type { Project } from '../api/types'
 
@@ -18,13 +19,17 @@ function formatDate(dateStr: string): string {
 function ProjectCard({
   project,
   onStart,
+  onEdit,
   onDelete,
+  isActive,
   isStarting,
   isDeleting,
 }: {
   project: Project
   onStart: () => void
+  onEdit: () => void
   onDelete: () => void
+  isActive: boolean
   isStarting: boolean
   isDeleting: boolean
 }) {
@@ -59,6 +64,14 @@ function ProjectCard({
             RUN
           </button>
           <button
+            onClick={onEdit}
+            disabled={isActive || isStarting || isDeleting}
+            className="p-2 text-neutral-400 hover:text-primary-500 hover:bg-primary-50 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title={isActive ? "Pare o projeto para editar" : "Editar projeto"}
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button
             onClick={onDelete}
             disabled={isStarting || isDeleting}
             className="p-2 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -82,6 +95,7 @@ export function ProjectSelector() {
   const startProject = useStartProject()
   const deleteProject = useDeleteProject()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [projectToEdit, setProjectToEdit] = useState<Project | null>(null)
   const [startingId, setStartingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null)
@@ -96,6 +110,10 @@ export function ProjectSelector() {
     } finally {
       setStartingId(null)
     }
+  }
+
+  const handleEditClick = (project: Project) => {
+    setProjectToEdit(project)
   }
 
   const handleDeleteClick = (id: string, name: string) => {
@@ -142,7 +160,9 @@ export function ProjectSelector() {
                 key={project.id}
                 project={project}
                 onStart={() => handleStart(project.id)}
+                onEdit={() => handleEditClick(project)}
                 onDelete={() => handleDeleteClick(project.id, project.name)}
+                isActive={data.active_project_id === project.id}
                 isStarting={startingId === project.id}
                 isDeleting={deletingId === project.id}
               />
@@ -172,6 +192,15 @@ export function ProjectSelector() {
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}
         />
+
+        {/* Edit Modal */}
+        {projectToEdit && (
+          <EditProjectModal
+            isOpen={!!projectToEdit}
+            onClose={() => setProjectToEdit(null)}
+            project={projectToEdit}
+          />
+        )}
 
         {/* Delete Confirmation Modal */}
         <ConfirmModal

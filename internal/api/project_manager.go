@@ -11,15 +11,24 @@ import (
 	"github.com/google/uuid"
 )
 
+// ChunkerConfig represents chunking configuration for a project
+type ChunkerConfig struct {
+	MinSize           int  `json:"min_size"`            // 200-1000 tokens
+	MaxSize           int  `json:"max_size"`            // 500-2000 tokens
+	Overlap           int  `json:"overlap"`             // 0-500 tokens
+	RespectBoundaries bool `json:"respect_boundaries"`  // true recommended
+}
+
 // Project represents a RAG project configuration
 type Project struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Host      string    `json:"host"`      // Ex: http://localhost:11434
-	Token     string    `json:"token"`     // API key (empty for Ollama)
-	Model     string    `json:"model"`     // Ex: nomic-embed-text
-	DBPath    string    `json:"db_path"`   // data/projects/{id}.db
-	CreatedAt time.Time `json:"created_at"`
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Host        string          `json:"host"`        // Ex: http://localhost:11434
+	Token       string          `json:"token"`       // API key (empty for Ollama)
+	Model       string          `json:"model"`       // Ex: nomic-embed-text
+	DBPath      string          `json:"db_path"`     // data/projects/{id}.db
+	CreatedAt   time.Time       `json:"created_at"`
+	ChunkConfig *ChunkerConfig  `json:"chunk_config,omitempty"` // Optional chunking configuration
 }
 
 // ProjectStore represents the JSON store for projects
@@ -147,6 +156,36 @@ func (pm *ProjectManager) Create(name, host, token, model string) (*Project, err
 	}
 
 	return &project, nil
+}
+
+// Update updates an existing project
+func (pm *ProjectManager) Update(id string, name, host, token, model string, chunkConfig *ChunkerConfig) (*Project, error) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	store, err := pm.load()
+	if err != nil {
+		return nil, err
+	}
+
+	// Find and update project
+	for i, p := range store.Projects {
+		if p.ID == id {
+			store.Projects[i].Name = name
+			store.Projects[i].Host = host
+			store.Projects[i].Token = token
+			store.Projects[i].Model = model
+			store.Projects[i].ChunkConfig = chunkConfig
+
+			if err := pm.save(store); err != nil {
+				return nil, err
+			}
+
+			return &store.Projects[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("project not found: %s", id)
 }
 
 // Delete removes a project and its database

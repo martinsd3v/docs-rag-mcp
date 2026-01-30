@@ -107,6 +107,7 @@ func (s *Server) setupRoutes() chi.Router {
 		// Project management routes (always available)
 		r.Get("/projects", s.handleListProjects)
 		r.Post("/projects", s.handleCreateProject)
+		r.Put("/projects/{id}", s.handleUpdateProject)
 		r.Delete("/projects/{id}", s.handleDeleteProject)
 		r.Post("/projects/{id}/start", s.handleStartProject)
 		r.Post("/projects/stop", s.handleStopProject)
@@ -121,6 +122,7 @@ func (s *Server) setupRoutes() chi.Router {
 			r.Get("/stats", s.handleStats)
 			r.Get("/documents", s.handleListDocuments)
 			r.Get("/documents/{id}", s.handleGetDocument)
+			r.Delete("/documents/{id}", s.handleDeleteDocument)
 			r.Post("/search", s.handleSearch)
 			r.Post("/upload", s.handleUpload)
 		})
@@ -175,8 +177,8 @@ func (s *Server) Start(ctx context.Context) error {
 		Addr:         addr,
 		Handler:      s.router,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		WriteTimeout: 0, // Disabled for SSE long-lived connections
+		IdleTimeout:  0, // Disabled - SSE manages keepalive internally
 	}
 
 	// Graceful shutdown
@@ -403,6 +405,22 @@ func (s *Server) handleGetDocument(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) handleDeleteDocument(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		s.writeError(w, http.StatusBadRequest, "document id is required", nil)
+		return
+	}
+
+	if err := s.store.DeleteDocument(id); err != nil {
+		s.writeError(w, http.StatusInternalServerError, "failed to delete document", err)
+		return
+	}
+
+	s.log("Deleted document %s", id)
+	s.writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {

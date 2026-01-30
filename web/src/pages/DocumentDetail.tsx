@@ -124,7 +124,7 @@ export function DocumentDetail() {
                   </span>
                 </div>
                 <div className="prose prose-neutral prose-sm max-w-none">
-                  <pre className="bg-neutral-50 p-4 rounded-lg overflow-x-auto text-sm whitespace-pre-wrap">
+                  <pre className="bg-neutral-50 p-4 rounded-lg overflow-x-auto text-xs whitespace-pre font-mono leading-tight">
                     {chunk.content}
                   </pre>
                 </div>

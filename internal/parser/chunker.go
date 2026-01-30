@@ -256,19 +256,25 @@ func (c *Chunker) formatChunkContent(sectionPath, content string) string {
 }
 
 // addOverlap adds overlap between consecutive chunks
+// Skips overlap for chunks with code blocks or tables to preserve formatting
 func (c *Chunker) addOverlap(chunks []Chunk) []Chunk {
 	if len(chunks) <= 1 || c.config.Overlap == 0 {
 		return chunks
 	}
 
 	for i := 1; i < len(chunks); i++ {
-		prevContent := chunks[i-1].Content
-		prevTokens := chunks[i-1].TokenCount
+		prevChunk := chunks[i-1]
+
+		// Skip overlap if previous chunk has code blocks or tables
+		// This prevents breaking ASCII diagrams and code formatting
+		if prevChunk.HasCodeBlock || prevChunk.HasTable {
+			continue
+		}
 
 		// Extract overlap from previous chunk
-		if prevTokens > c.config.Overlap {
+		if prevChunk.TokenCount > c.config.Overlap {
 			// Take last N tokens from previous chunk
-			overlap := c.extractLastTokens(prevContent, c.config.Overlap)
+			overlap := c.extractLastTokens(prevChunk.Content, c.config.Overlap)
 
 			// Prepend to current chunk
 			chunks[i].Content = overlap + "\n\n---\n\n" + chunks[i].Content
@@ -283,17 +289,39 @@ func (c *Chunker) addOverlap(chunks []Chunk) []Chunk {
 }
 
 // extractLastTokens extracts approximately the last N tokens from text
+// Preserves line breaks and formatting
 func (c *Chunker) extractLastTokens(text string, n int) string {
-	words := strings.Fields(text)
+	// Count tokens in the text
+	totalTokens := c.countTokens(text)
 
-	// Rough approximation: 1 token ≈ 0.75 words
-	wordCount := int(float64(n) * 0.75)
-
-	if wordCount >= len(words) {
+	// If text has fewer tokens than requested, return all
+	if totalTokens <= n {
 		return text
 	}
 
-	return strings.Join(words[len(words)-wordCount:], " ")
+	// Split by words but preserve structure
+	lines := strings.Split(text, "\n")
+
+	// Work backwards from the end to collect approximately N tokens
+	collectedTokens := 0
+	targetTokens := n
+	var resultLines []string
+
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		lineTokens := c.countTokens(line)
+
+		// Add this line to result
+		resultLines = append([]string{line}, resultLines...)
+		collectedTokens += lineTokens
+
+		// Stop when we have enough tokens
+		if collectedTokens >= targetTokens {
+			break
+		}
+	}
+
+	return strings.Join(resultLines, "\n")
 }
 
 // detectSpecialContent checks if section contains code blocks or tables

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getHealth, getStats, getDocuments, getDocument, search, uploadDocuments } from '../api/client'
+import { getHealth, getStats, getDocuments, getDocument, deleteDocument, search, uploadDocuments } from '../api/client'
 import type { SearchRequest } from '../api/types'
 
 export function useHealth() {
@@ -54,6 +54,18 @@ export function useUpload() {
     mutationFn: (formData: FormData) => uploadDocuments(formData),
     onSuccess: () => {
       // Invalidate documents and stats queries to refresh the UI
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+    },
+  })
+}
+
+export function useDeleteDocument() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (docId: string) => deleteDocument(docId),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
     },

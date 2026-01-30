@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Settings, LogOut, Folder, Loader2 } from 'lucide-react'
+import { Power, Folder, Loader2 } from 'lucide-react'
 import { useHealth } from '../../hooks/useApi'
 import { useActiveProject, useStopProject } from '../../hooks/useProjects'
 
@@ -57,27 +57,19 @@ export function Header() {
           </span>
         </div>
 
-        {/* Actions */}
-        <button className="p-2 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 rounded-lg transition-colors">
-          <Bell className="w-5 h-5" />
-        </button>
-        <button className="p-2 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 rounded-lg transition-colors">
-          <Settings className="w-5 h-5" />
-        </button>
-
-        {/* Exit Button */}
+        {/* Stop Button */}
         <button
           onClick={handleExit}
           disabled={stopProject.isPending}
           className="flex items-center gap-2 px-3 py-2 text-neutral-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-          title="Sair do projeto"
+          title="Parar servidor MCP"
         >
           {stopProject.isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
-            <LogOut className="w-4 h-4" />
+            <Power className="w-4 h-4" />
           )}
-          <span className="text-sm font-medium">Sair</span>
+          <span className="text-sm font-medium">STOP</span>
         </button>
       </div>
     </header>

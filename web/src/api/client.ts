@@ -10,6 +10,7 @@ import type {
   ProjectListResponse,
   ActiveProjectResponse,
   CreateProjectRequest,
+  UpdateProjectRequest,
   Project,
 } from './types'
 
@@ -29,6 +30,11 @@ export async function listProjects(): Promise<ProjectListResponse> {
 
 export async function createProject(request: CreateProjectRequest): Promise<Project> {
   const { data } = await api.post<Project>('/projects', request)
+  return data
+}
+
+export async function updateProject(id: string, request: UpdateProjectRequest): Promise<Project> {
+  const { data } = await api.put<Project>(`/projects/${id}`, request)
   return data
 }
 
@@ -82,6 +88,10 @@ export async function getDocument(
 ): Promise<DocumentResponse> {
   const { data } = await api.get<DocumentResponse>(`/documents/${id}`, { params })
   return data
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  await api.delete(`/documents/${id}`)
 }
 
 // Search

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -87,8 +88,21 @@ func (s *Server) processUploadedFile(r *http.Request, fh *multipart.FileHeader) 
 
 	result.DocID = doc.ID
 
+	// Get chunker config from active project
+	chunkerConfig := parser.DefaultChunkerConfig()
+	s.mu.RLock()
+	if s.activeProject != nil && s.activeProject.ChunkConfig != nil {
+		chunkerConfig = &parser.ChunkerConfig{
+			MinSize:           s.activeProject.ChunkConfig.MinSize,
+			MaxSize:           s.activeProject.ChunkConfig.MaxSize,
+			Overlap:           s.activeProject.ChunkConfig.Overlap,
+			RespectBoundaries: s.activeProject.ChunkConfig.RespectBoundaries,
+		}
+	}
+	s.mu.RUnlock()
+
 	// Chunk document
-	chunker := parser.NewChunker(parser.DefaultChunkerConfig())
+	chunker := parser.NewChunker(chunkerConfig)
 	chunks, err := chunker.ChunkDocument(doc)
 	if err != nil {
 		result.Error = "failed to chunk document: " + err.Error()
@@ -163,19 +177,39 @@ func (s *Server) processUploadedFile(r *http.Request, fh *multipart.FileHeader) 
 		chunkContents[i] = chunk.Content
 	}
 
-	// Generate and store embeddings
+	// Generate and store embeddings - required for RAG functionality
 	if s.embeddingClient != nil && len(chunkContents) > 0 {
 		embResult, err := s.embeddingClient.EmbedBatch(r.Context(), chunkContents)
 		if err != nil {
-			s.log("Warning: failed to generate embeddings for %s: %v", doc.ID, err)
-			// Continue without embeddings - document is still searchable by metadata
-		} else {
-			for i, emb := range embResult.Results {
-				if err := s.store.InsertChunkEmbedding(chunkIDs[i], emb.Embedding, s.cfg.Model); err != nil {
-					s.log("Warning: failed to store embedding for chunk %d: %v", i, err)
-				}
+			s.log("Error: failed to generate embeddings for %s: %v", doc.ID, err)
+			// Delete document since embeddings are required for RAG
+			s.store.DeleteDocument(doc.ID)
+			result.Error = fmt.Sprintf("Falha ao gerar embeddings: %v. Documento não foi indexado.", err)
+			return result
+		}
+
+		// Store embeddings
+		embeddingErrors := 0
+		for i, emb := range embResult.Results {
+			if err := s.store.InsertChunkEmbedding(chunkIDs[i], emb.Embedding, s.cfg.Model); err != nil {
+				s.log("Error: failed to store embedding for chunk %d: %v", i, err)
+				embeddingErrors++
 			}
 		}
+
+		// If any embedding failed to store, delete document and fail
+		if embeddingErrors > 0 {
+			s.log("Error: %d embeddings failed to store for %s", embeddingErrors, doc.ID)
+			s.store.DeleteDocument(doc.ID)
+			result.Error = fmt.Sprintf("Falha ao armazenar %d embeddings. Documento não foi indexado.", embeddingErrors)
+			return result
+		}
+	} else if s.embeddingClient == nil {
+		// No embedding client configured - this is a fatal error
+		s.log("Error: no embedding client configured for %s", doc.ID)
+		s.store.DeleteDocument(doc.ID)
+		result.Error = "Sistema de embeddings não está configurado. Documento não foi indexado."
+		return result
 	}
 
 	// Extract and store cross-references

@@ -26,8 +26,8 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Open database
-	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_synchronous=NORMAL&_cache_size=-64000")
+	// Open database with foreign keys enabled for CASCADE support
+	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_synchronous=NORMAL&_cache_size=-64000&_foreign_keys=ON")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -300,7 +300,8 @@ func (s *Store) ListDocuments() ([]Document, error) {
 	return docs, nil
 }
 
-// DeleteDocument deletes a document and its chunks
+// DeleteDocument deletes a document and its related data
+// With foreign keys enabled, chunks and chunk_embeddings are deleted via CASCADE
 func (s *Store) DeleteDocument(id string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -308,19 +309,13 @@ func (s *Store) DeleteDocument(id string) error {
 	}
 	defer tx.Rollback()
 
-	// Delete chunks first (cascade doesn't work in SQLite by default)
-	_, err = tx.Exec(`DELETE FROM chunks WHERE doc_id = ?`, id)
-	if err != nil {
-		return err
-	}
-
-	// Delete cross-references
+	// Delete cross-references (not CASCADE protected)
 	_, err = tx.Exec(`DELETE FROM cross_references WHERE source_doc_id = ?`, id)
 	if err != nil {
 		return err
 	}
 
-	// Delete document
+	// Delete document (CASCADE will handle chunks and chunk_embeddings)
 	_, err = tx.Exec(`DELETE FROM documents WHERE id = ?`, id)
 	if err != nil {
 		return err

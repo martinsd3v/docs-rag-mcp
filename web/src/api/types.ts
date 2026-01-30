@@ -1,6 +1,13 @@
 // API Types
 
 // Project types
+export interface ChunkConfig {
+  min_size: number          // 200-1000 tokens
+  max_size: number          // 500-2000 tokens
+  overlap: number           // 0-500 tokens
+  respect_boundaries: boolean // true recommended
+}
+
 export interface Project {
   id: string
   name: string
@@ -9,6 +16,7 @@ export interface Project {
   model: string
   db_path: string
   created_at: string
+  chunk_config?: ChunkConfig
 }
 
 export interface ProjectListResponse {
@@ -26,6 +34,14 @@ export interface CreateProjectRequest {
   host: string
   token?: string
   model: string
+}
+
+export interface UpdateProjectRequest {
+  name: string
+  host: string
+  token?: string
+  model: string
+  chunk_config?: ChunkConfig
 }
 
 export interface HealthResponse {

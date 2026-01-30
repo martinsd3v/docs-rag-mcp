@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -36,6 +37,15 @@ type CreateProjectRequest struct {
 	Host  string `json:"host"`
 	Token string `json:"token,omitempty"`
 	Model string `json:"model"`
+}
+
+// UpdateProjectRequest represents the update project request
+type UpdateProjectRequest struct {
+	Name        string          `json:"name"`
+	Host        string          `json:"host"`
+	Token       string          `json:"token,omitempty"`
+	Model       string          `json:"model"`
+	ChunkConfig *ChunkerConfig  `json:"chunk_config,omitempty"`
 }
 
 // toProjectResponse converts a Project to ProjectResponse
@@ -126,6 +136,74 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// handleUpdateProject updates an existing project
+func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		s.writeError(w, http.StatusBadRequest, "project id is required", nil)
+		return
+	}
+
+	var req UpdateProjectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	// Validation
+	if req.Name == "" || req.Host == "" || req.Model == "" {
+		s.writeError(w, http.StatusBadRequest, "name, host, and model are required", nil)
+		return
+	}
+
+	// Validate chunk config if provided
+	if req.ChunkConfig != nil {
+		if err := validateChunkConfig(req.ChunkConfig); err != nil {
+			s.writeError(w, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
+	}
+
+	// Check if project is currently active
+	s.mu.RLock()
+	isActive := s.activeProjectID == id
+	s.mu.RUnlock()
+
+	if isActive {
+		s.writeError(w, http.StatusConflict, "cannot update active project - stop it first", nil)
+		return
+	}
+
+	project, err := s.projectManager.Update(id, req.Name, req.Host, req.Token, req.Model, req.ChunkConfig)
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "failed to update project", err)
+		return
+	}
+
+	resp := toProjectResponse(project)
+	s.writeJSON(w, http.StatusOK, resp)
+}
+
+// validateChunkConfig validates chunking configuration
+func validateChunkConfig(cfg *ChunkerConfig) error {
+	if cfg.MinSize < 200 || cfg.MinSize > 1000 {
+		return fmt.Errorf("min_size must be between 200 and 1000 tokens")
+	}
+	if cfg.MaxSize < 500 || cfg.MaxSize > 2000 {
+		return fmt.Errorf("max_size must be between 500 and 2000 tokens")
+	}
+	if cfg.MinSize >= cfg.MaxSize {
+		return fmt.Errorf("min_size must be less than max_size")
+	}
+	if cfg.Overlap < 0 || cfg.Overlap > 500 {
+		return fmt.Errorf("overlap must be between 0 and 500 tokens")
+	}
+	if cfg.Overlap >= cfg.MinSize {
+		return fmt.Errorf("overlap must be less than min_size")
+	}
+	return nil
 }
 
 // handleGetActiveProject returns the currently active project

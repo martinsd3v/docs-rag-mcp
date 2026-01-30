@@ -1,13 +1,22 @@
 {
   "projects": [
     {
-      "id": "43c7b2c1",
-      "name": "terrix",
+      "id": "10ab7a3f",
+      "name": "novo",
       "host": "http://localhost:11434",
       "token": "",
       "model": "nomic-embed-text",
-      "db_path": "data/projects/43c7b2c1.db",
-      "created_at": "2026-01-30T00:55:57.66943-03:00"
+      "db_path": "data/projects/10ab7a3f.db",
+      "created_at": "2026-01-30T17:27:56.118638-03:00"
+    },
+    {
+      "id": "f0c69be3",
+      "name": "online",
+      "host": "https://ai.v3m.ai/v1",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc2OTgwMjAxNSwianRpIjoiYWE0MGExMTktOTRlOC00ODRjLWFkZTAtZjYwMTI4ZGU4MGEyIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6Im1hYXJhdWpvIiwibmJmIjoxNzY5ODAyMDE1LCJleHAiOjE3NzIzOTQwMTUsImdyb3VwcyI6WyJnZW5haV9hcGlfYWNjZXNzX2RldiJdfQ.W0g4oCo3JJn_74nHq42qd5mbla8CXrRr2Ja1Yjhz4lk",
+      "model": "text-embedding-ada-002",
+      "db_path": "data/projects/f0c69be3.db",
+      "created_at": "2026-01-30T17:30:09.446788-03:00"
     }
   ]
 }
